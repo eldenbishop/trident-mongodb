@@ -1,5 +1,6 @@
 package com.exacttarget.sml.storm.trident.mongo;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -25,13 +26,11 @@ public class MongoDbStateNonTransactionalSerializer implements MongoDbStateSeria
         return decodeBasicDBObject(dbo);
     }
 
-    private static Set<Class> LITERAL_TYPES = new HashSet(ImmutableList.of(
-            Boolean.class, Short.class, Integer.class, Long.class, Float.class, Double.class, Date.class
+    private static Set<Class> LITERAL_TYPES = new HashSet<Class>(ImmutableList.of(
+            Boolean.class, Short.class, Integer.class, Long.class, Float.class, Double.class, Date.class, String.class
     ));
 
-    private static Set<Class> QUOTED_TYPES = new HashSet(ImmutableList.of(
-            Character.class, String.class
-    ));
+    private transient ObjectMapper mapper;
 
     private BasicDBObject encodeBasicDBObject(Object o) {
         BasicDBObject container = new BasicDBObject();
@@ -42,10 +41,14 @@ public class MongoDbStateNonTransactionalSerializer implements MongoDbStateSeria
             Class type = o.getClass();
             if (LITERAL_TYPES.contains(type)) {
                 container.append("scheme", type.getName()).append("value", o);
-            } else if (QUOTED_TYPES.contains(type)) {
-                container.append("scheme", type.getName()).append("value", String.valueOf(o));
             } else {
-                throw new UnsupportedOperationException();
+                try {
+                    if (mapper == null) mapper = new ObjectMapper();
+                    String jsonString = mapper.writeValueAsString(o);
+                    container.append("scheme", type.getName()).append("value", jsonString);
+                } catch(Exception ex) {
+                    throw new RuntimeException(ex);
+                }
             }
         }
         return container;
@@ -57,21 +60,31 @@ public class MongoDbStateNonTransactionalSerializer implements MongoDbStateSeria
             return null;
         else if (scheme instanceof String) {
             if (scheme.equals("java.lang.Short"))
-                return ((Number)dbo.get("value")).longValue();
+                return ((Number)dbo.get("value")).shortValue();
             else if (scheme.equals("java.lang.Integer"))
-                return ((Number)dbo.get("value")).longValue();
+                return ((Number)dbo.get("value")).intValue();
             else if (scheme.equals("java.lang.Long"))
                 return ((Number)dbo.get("value")).longValue();
             else if (scheme.equals("java.lang.Float"))
-                return ((Number)dbo.get("value")).longValue();
+                return ((Number)dbo.get("value")).floatValue();
             else if (scheme.equals("java.lang.Double"))
-                return ((Number)dbo.get("value")).longValue();
+                return ((Number)dbo.get("value")).doubleValue();
             else if (scheme.equals("java.lang.String"))
                 return dbo.get("value");
             else if (scheme.equals("java.util.Date"))
                 return dbo.get("value");
+            else {
+                try {
+                    if (mapper == null) mapper = new ObjectMapper();
+                    String jsonText = (String)dbo.get("value");
+                    Class type = Class.forName((String)scheme);
+                    return mapper.readValue(jsonText, type);
+                } catch(Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
         }
-        throw new UnsupportedOperationException("" + scheme);
+        throw new UnsupportedOperationException("Unsupported scheme: " + scheme);
     }
 
 }
