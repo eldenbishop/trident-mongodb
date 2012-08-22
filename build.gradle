@@ -1,0 +1,27 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+
+sourceCompatibility = 1.6
+version = '0.1'
+
+repositories {
+  mavenCentral()
+  mavenRepo name: 'clojars.org', url: 'http://clojars.org/repo'
+}
+
+ext.lib = [
+  mongodb : ['org.mongodb:mongo-java-driver:2.8.0'],
+  storm : ['storm:storm:0.8.0'],
+  junit : ['junit:junit:4.10', 'org.jmock:jmock-legacy:2.5.1'],
+  guava : ['com.google.guava:guava:13.0']
+]
+
+dependencies {
+  compile ext.lib.mongodb
+  compile ext.lib.storm
+  compile ext.lib.guava
+}
+
+idea.project {
+  jdkName = "1.6"
+}
